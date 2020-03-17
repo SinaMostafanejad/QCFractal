@@ -356,7 +356,7 @@ Alternatively, you can install a system PostgreSQL manually, please see the foll
         self.logger("\nDatabase server successfully started!")
 
     def alembic_commands(self) -> List[str]:
-        return [shutil.which("alembic"), "-c", self._alembic_ini, "-x", "uri=" + self.config.database_uri()]
+        return [shutil.which("alembic"), "-c", self._alembic_ini, "-x", "uri=" + self.config.database_uri(safe=False)]
 
     def init_database(self) -> None:
 
