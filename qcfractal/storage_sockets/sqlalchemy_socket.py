@@ -547,6 +547,11 @@ class SQLAlchemySocket:
            number of deleted kvstore objects
         """
 
+        ids = [x for x in ids if x is not None]
+
+        if len(ids) == 0:
+            return 0
+
         with self.session_scope() as session:
             count = session.query(KVStoreORM).filter(KVStoreORM.id.in_(ids)).delete(synchronize_session=False)
         return count
@@ -1949,6 +1954,9 @@ class SQLAlchemySocket:
             number of updated services
         """
 
+        # KVStore objects to be deleted
+        old_kvstore_ids = []
+
         updated_count = 0
         for service in records_list:
             if service.id is None:
@@ -1974,11 +1982,13 @@ class SQLAlchemySocket:
 
             # Copy the stdout/error from the service itself to its procedure
             if service.stdout:
-                stdout = KVStore(data=service.stdout)
+                old_kvstore_ids.append(procedure.stdout)
+                stdout = KVStore.compress(service.stdout, CompressionEnum.lzma, 6)
                 stdout_id = self.add_kvstore([stdout])["data"][0]
                 procedure.__dict__["stdout"] = stdout_id
             if service.error:
-                error = KVStore(data=service.error.dict())
+                old_kvstore_ids.append(procedure.error)
+                error = KVStore.compress(service.error, CompressionEnum.lzma, 1)
                 error_id = self.add_kvstore([error])["data"][0]
                 procedure.__dict__["error"] = error_id
 
@@ -1986,6 +1996,7 @@ class SQLAlchemySocket:
 
             updated_count += 1
 
+        self.del_kvstore(old_kvstore_ids)
         return updated_count
 
     def update_service_status(
@@ -2422,6 +2433,9 @@ class SQLAlchemySocket:
                 .all()
             )
 
+            # KVStore ids to delete
+            old_kvstore_ids = []
+
             for (task_id, error_dict), task_obj, base_result in zip(sorted_data.items(), task_objects, base_results):
 
                 task_ids.append(task_id)
@@ -2437,9 +2451,15 @@ class SQLAlchemySocket:
                 # Compress error dicts here. Should be fast, since errors are small
                 err = KVStore.compress(error_dict, CompressionEnum.lzma, 1)
                 err_id = self.add_kvstore([err])["data"][0]
+
+                # Mark any existing error text for deletion
+                old_kvstore_ids.append(base_result.error)
                 base_result.error = err_id
 
             session.commit()
+
+        # Delete old kvstore objects
+        self.del_kvstore(old_kvstore_ids)
 
         return len(task_ids)
 

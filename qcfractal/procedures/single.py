@@ -215,6 +215,9 @@ class SingleResultTasks(BaseTasks):
         completed_tasks = []
         updates = []
 
+        # Old KVStore objects that can be deleted
+        old_kvstore_ids = []
+
         for output in result_outputs:
             # Find the existing result information in the database
             base_id = output["base_result"]
@@ -227,7 +230,6 @@ class SingleResultTasks(BaseTasks):
 
             # Some consistency checks:
             # Is this marked as incomplete?
-            # TODO: Check manager, although that information isn't sent to us right now
             if existing_result["status"] != "INCOMPLETE":
                 self.logger.warning(f"Skipping returned results for base_id={base_id}, as it is not marked incomplete")
                 continue
@@ -237,6 +239,11 @@ class SingleResultTasks(BaseTasks):
             # Adds the results to the database and sets the appropriate fields
             # inside the dictionary
             self.retrieve_outputs(rdata)
+
+            # Store the existing kvstore ids so we can delete them later
+            old_kvstore_ids.append(existing_result["stdout"])
+            old_kvstore_ids.append(existing_result["stderr"])
+            old_kvstore_ids.append(existing_result["error"])
 
             # Store Wavefunction data
             if rdata.get("wavefunction", False):
@@ -291,6 +298,7 @@ class SingleResultTasks(BaseTasks):
 
         self.storage.update_results(updates)
         self.storage.queue_mark_complete(completed_tasks)
+        self.storage.del_kvstore(old_kvstore_ids)
 
         return completed_tasks
 

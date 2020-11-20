@@ -105,11 +105,35 @@ def test_task_client_restart(fractal_compute_server):
     tasks = client.query_tasks(base_result=ret.submitted)[0]
     assert tasks.status == "ERROR"
 
+    # Check that the result record was updated as well
+    records = client.query_results(ret.submitted)[0]
+    assert records.status == "ERROR"
+    err_id = records.error
+
     upd = client.modify_tasks("restart", ret.submitted)
     assert upd.n_updated == 1
 
     tasks = client.query_tasks(base_result=ret.submitted)[0]
     assert tasks.status == "WAITING"
+
+    # Wait to error again
+    fractal_compute_server.await_results()
+
+    # Should still be errored
+    tasks = client.query_tasks(base_result=ret.submitted)[0]
+    assert tasks.status == "ERROR"
+
+    # result record is still errored
+    records = client.query_results(ret.submitted)[0]
+    assert records.status == "ERROR"
+    new_err_id = records.error
+
+    # Has the error been replaced successfully
+    assert err_id != new_err_id
+
+    # Has the old error been deleted
+    kv = client.query_kvstore([err_id, new_err_id])
+    assert set(kv) == set(new_err_id)
 
 
 @testing.using_rdkit

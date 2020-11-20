@@ -232,6 +232,10 @@ class OptimizationTasks(BaseTasks):
 
         completed_tasks = []
         updates = []
+
+        # Old KVStore objects that can be deleted
+        old_kvstore_ids = []
+
         for output in opt_outputs:
             rec = self.storage.get_procedures(id=output["base_result"])["data"][0]
             rec = OptimizationRecord(**rec)
@@ -240,6 +244,11 @@ class OptimizationTasks(BaseTasks):
 
             # Adds the results to the database and sets the ids inside the dictionary
             self.retrieve_outputs(procedure)
+
+            # Store the existing kvstore ids so we can delete them later
+            old_kvstore_ids.append(rec.stdout)
+            old_kvstore_ids.append(rec.stderr)
+            old_kvstore_ids.append(rec.error)
 
             # Add initial and final molecules
             update_dict = {}
